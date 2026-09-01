@@ -359,6 +359,8 @@ export default function App() {
             profile={activeProfile}
             aiDiagnosis={aiDiagnosis}
             onSaveAiDiagnosis={handleSaveAiDiagnosis}
+            categoryBudgets={categoryBudgets}
+            onUpdateCategoryBudgets={handleUpdateCategoryBudgets}
           />
         )}
 

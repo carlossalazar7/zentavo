@@ -10,7 +10,17 @@ import {
   HelpCircle,
   Lightbulb,
   ShieldCheck,
-  TrendingDown
+  TrendingDown,
+  Calculator,
+  AlertCircle,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Briefcase,
+  DollarSign,
+  ArrowRight
 } from 'lucide-react';
 import { ChatMessage, SalaryProfile, Expense, Debt } from '../types';
 import { 
@@ -39,11 +49,20 @@ export const AiChatAdvisor: React.FC<AiChatAdvisorProps> = ({
   const debtMetrics = calculateDebtMetrics(debts, totalIncome);
   const moneyLeaks = detectMoneyLeaks(expenses);
 
+  // Hourly wage calculation (160 working hours a month standard)
+  const hourlyWage = totalIncome > 0 ? totalIncome / 160 : 0;
+
+  // Affordability Calculator State
+  const [showAffordabilityCalc, setShowAffordabilityCalc] = useState(false);
+  const [purchaseTitle, setPurchaseTitle] = useState('');
+  const [purchaseAmount, setPurchaseAmount] = useState<number | ''>('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   const initialWelcomeMessage: ChatMessage = {
     id: 'welcome-1',
     role: 'model',
     content: totalIncome === 0 && expenses.length === 0 && debts.length === 0
-      ? `¡Hola! Soy tu **Coach Financiero de Zentavo**. 
+      ? `¡Hola! Soy tu **Coach Financiero Zentavo SV**. 
 
 Tu panel está listo y limpio para comenzar:
 - Puedes configurar tu **Sueldo e Ingresos** en Ajustes.
@@ -51,15 +70,15 @@ Tu panel está listo y limpio para comenzar:
 - Registrar tus **Deudas o Tarjetas** para calcular tu nivel de endeudamiento (DTI) y ver tu orden de pago óptimo.
 
 ¿En qué te gustaría que te ayude hoy? Puedes hacerme cualquier consulta financiera, preguntarme sobre estrategias de ahorro o cómo armar un presupuesto desde cero.`
-      : `¡Hola! Soy tu **Coach Financiero de Zentavo**. 
+      : `¡Hola! Soy tu **Coach Financiero Zentavo SV**. 
 
-He analizado tus datos actuales:
-- **Sueldo Total:** ${formatMoney(totalIncome, profile.currencySymbol)}
+He analizado los números de tu perfil **"${profile.name}"**:
+- **Ingreso Total:** ${formatMoney(totalIncome, profile.currencySymbol)}
 - **Gastos del Mes:** ${formatMoney(totalExpenses, profile.currencySymbol)}
 - **Carga de Deudas:** ${formatMoney(debtMetrics.totalBalance, profile.currencySymbol)} (${debtMetrics.dtiRatio}% de tu sueldo — Nivel **${debtMetrics.riskLevel}**)
-- **Fugas detectadas:** ${moneyLeaks.length} categorías que podrías optimizar.
+- **Fugas detectadas:** ${moneyLeaks.length} categorías con oportunidad de recorte.
 
-¿En qué te gustaría que te ayude hoy? Puedes preguntarme cómo recortar gastos específicos, qué estrategia de deuda seguir o cómo organizar tu próxima quincena.`,
+¿En qué te gustaría que nos enfoquemos hoy? Puedes preguntarme cómo organizar tu quincena, qué deuda pagar primero o utilizar la calculadora de compras abajo.`,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
@@ -93,8 +112,16 @@ He analizado tus datos actuales:
     '¿Cómo organizo mi sueldo si las deudas superan el 30%?',
     '¿En qué gastos específicos puedo recortar $100 al mes?',
     '¿Qué deuda me conviene liquidar primero y por qué?',
+    'Guion para llamar al banco y pedir baja de intereses',
     '¿Cómo armo mi fondo de emergencia si vivo con lo justo?',
     '¿Cómo aplico la regla 50/30/20 a mi sueldo real?',
+  ];
+
+  // Follow-up suggestion chips
+  const followUpChips = [
+    '¿Cómo aplico esto a mi próxima quincena?',
+    '¿Qué pasa si tengo un ingreso imprevisto extra?',
+    'Explícame la diferencia entre Bola de Nieve y Avalancha',
   ];
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -134,7 +161,7 @@ He analizado tus datos actuales:
             rate: d.interestRate,
           })),
         },
-        expensesList: expenses.slice(0, 20).map((e) => ({
+        expensesList: expenses.slice(0, 25).map((e) => ({
           title: e.title,
           amount: e.amount,
           category: e.category,
@@ -178,7 +205,7 @@ He analizado tus datos actuales:
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         role: 'model',
-        content: `⚠️ **Ocurrió un error:** ${err.message || 'No se pudo contactar al asesor IA. Verifica tu conexión.'}`,
+        content: `⚠️ **Ocurrió un error:** ${err.message || 'No se pudo contactar al asesor IA. Verifica tu conexión o intenta más tarde.'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -188,12 +215,56 @@ He analizado tus datos actuales:
   };
 
   const handleClearChat = () => {
-    setMessages([initialWelcomeMessage]);
-    saveToStorage(chatStorageKey, [initialWelcomeMessage]);
+    if (window.confirm('¿Deseas reiniciar la conversación de este perfil?')) {
+      setMessages([initialWelcomeMessage]);
+      saveToStorage(chatStorageKey, [initialWelcomeMessage]);
+    }
+  };
+
+  const handleCopyMessage = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Affordability analysis calculations
+  const numPurchaseAmount = Number(purchaseAmount) || 0;
+  const purchasePctOfIncome = totalIncome > 0 ? (numPurchaseAmount / totalIncome) * 100 : 0;
+  const purchaseHoursOfWork = hourlyWage > 0 ? numPurchaseAmount / hourlyWage : 0;
+  const purchaseDaysOfWork = purchaseHoursOfWork / 8;
+
+  let affordabilityVerdict: { color: string; label: string; explanation: string } = {
+    color: 'emerald',
+    label: '🟢 Compra Segura / Planificable',
+    explanation: 'Representa menos del 5% de tu ingreso mensual y no compromete tus compromisos de deuda.',
+  };
+
+  if (numPurchaseAmount > 0) {
+    if (debtMetrics.dtiRatio > 40 || purchasePctOfIncome > 20) {
+      affordabilityVerdict = {
+        color: 'rose',
+        label: '🔴 Alto Impacto / Desaconsejado Ahora',
+        explanation: `Representa el ${purchasePctOfIncome.toFixed(1)}% de tu sueldo y equivale a ${purchaseHoursOfWork.toFixed(0)} horas de trabajo. Con un DTI del ${debtMetrics.dtiRatio}%, este gasto retrasará el pago de tus deudas.`,
+      };
+    } else if (purchasePctOfIncome > 8 || debtMetrics.dtiRatio > 25) {
+      affordabilityVerdict = {
+        color: 'amber',
+        label: '🟡 Precaución (Aplica regla de las 48h)',
+        explanation: `Equivale a ${purchaseHoursOfWork.toFixed(0)} horas de trabajo (${purchaseDaysOfWork.toFixed(1)} días laborales). Espera 48 horas antes de comprar para evitar impulso.`,
+      };
+    }
+  }
+
+  const handleConsultAffordabilityInChat = () => {
+    if (numPurchaseAmount <= 0) return;
+    const item = purchaseTitle.trim() || 'esta compra';
+    const text = `Estoy evaluando comprar "${item}" por ${formatMoney(numPurchaseAmount, profile.currencySymbol)} (equivale al ${purchasePctOfIncome.toFixed(1)}% de mi sueldo o ${purchaseHoursOfWork.toFixed(1)} horas de trabajo). ¿Me conviene hacerlo ahora considerando mis deudas y metas, o qué alternativa me recomiendas?`;
+    handleSendMessage(text);
+    setShowAffordabilityCalc(false);
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-xs flex flex-col h-[780px] max-h-[85vh] overflow-hidden">
+    <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-xs flex flex-col h-[820px] max-h-[85vh] overflow-hidden">
       {/* Top Header */}
       <div className="p-4 sm:p-5 border-b border-zinc-200 flex items-center justify-between bg-zinc-900 text-white">
         <div className="flex items-center space-x-3">
@@ -202,32 +273,113 @@ He analizado tus datos actuales:
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-sm sm:text-base text-white">Coach Financiero Zentavo <span className="text-amber-400 font-extrabold text-xs">SV</span></h3>
+              <h3 className="font-bold text-sm sm:text-base text-white">
+                Coach Financiero Zentavo <span className="text-amber-400 font-extrabold text-xs">SV</span>
+              </h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Gemini AI
+                Gemini 3.7 Flash
               </span>
             </div>
             <p className="text-xs text-zinc-400">
-              Conectado a tus números: Sueldo {formatMoney(totalIncome, profile.currencySymbol)} · DTI {debtMetrics.dtiRatio}%
+              Perfil: <strong className="text-zinc-200">{profile.name}</strong> · Ingreso: {formatMoney(totalIncome, profile.currencySymbol)} · DTI: {debtMetrics.dtiRatio}%
             </p>
           </div>
         </div>
 
-        <button
-          onClick={handleClearChat}
-          className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 text-xs flex items-center space-x-1 transition-colors"
-          title="Reiniciar conversación"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span className="hidden sm:inline">Limpiar</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowAffordabilityCalc(!showAffordabilityCalc)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
+              showAffordabilityCalc 
+                ? 'bg-emerald-500 text-zinc-950 font-bold' 
+                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+            }`}
+            title="Calculadora ¿Puedo permitirme este gasto?"
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">¿Puedo comprar esto?</span>
+          </button>
+
+          <button
+            onClick={handleClearChat}
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 text-xs flex items-center space-x-1 transition-colors"
+            title="Reiniciar conversación"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Affordability Drawer Widget */}
+      {showAffordabilityCalc && (
+        <div className="bg-zinc-900 text-white p-4 border-b border-zinc-800 animate-in slide-in-from-top-2 duration-200 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center space-x-1.5">
+              <Calculator className="w-4 h-4" />
+              <span>Calculadora de Compras Inteligentes & Horas de Trabajo</span>
+            </span>
+            <button onClick={() => setShowAffordabilityCalc(false)} className="text-xs text-zinc-400 hover:text-white">✕</button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[11px] text-zinc-300 block">¿Qué deseas comprar?</label>
+              <input
+                type="text"
+                value={purchaseTitle}
+                onChange={(e) => setPurchaseTitle(e.target.value)}
+                placeholder="Ej: Celular nuevo, Zapatos..."
+                className="w-full px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-zinc-300 block">Precio ({profile.currencySymbol})</label>
+              <input
+                type="number"
+                value={purchaseAmount}
+                onChange={(e) => setPurchaseAmount(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                placeholder="0.00"
+                className="w-full px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleConsultAffordabilityInChat}
+                disabled={numPurchaseAmount <= 0}
+                className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-zinc-950 font-bold text-xs flex items-center justify-center space-x-1 transition-all"
+              >
+                <span>Preguntar al Coach IA</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {numPurchaseAmount > 0 && (
+            <div className="p-3 bg-zinc-800/80 rounded-xl border border-zinc-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="space-y-1">
+                <span className="font-bold text-white block">{affordabilityVerdict.label}</span>
+                <p className="text-zinc-300 text-[11px]">{affordabilityVerdict.explanation}</p>
+              </div>
+              <div className="flex items-center space-x-3 shrink-0 text-right">
+                <div className="p-2 bg-zinc-900 rounded-lg border border-zinc-700">
+                  <span className="text-[10px] text-zinc-400 block">Horas de Trabajo</span>
+                  <span className="font-bold text-emerald-400">{purchaseHoursOfWork.toFixed(1)} hrs</span>
+                </div>
+                <div className="p-2 bg-zinc-900 rounded-lg border border-zinc-700">
+                  <span className="text-[10px] text-zinc-400 block">% de tu Sueldo</span>
+                  <span className="font-bold text-white">{purchasePctOfIncome.toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quick Prompts Bar */}
       <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-2.5 overflow-x-auto scrollbar-none flex items-center space-x-2">
         <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider shrink-0 flex items-center space-x-1">
           <Lightbulb className="w-3.5 h-3.5 text-zinc-600" />
-          <span>Preguntas Rápidas:</span>
+          <span>Consultas Rápidas:</span>
         </span>
         {quickQuestions.map((q, idx) => (
           <button
@@ -271,12 +423,28 @@ He analizado tus datos actuales:
                 <div className="whitespace-pre-wrap">
                   {msg.content}
                 </div>
-                <div
-                  className={`text-[10px] pt-1 text-right ${
-                    isUser ? 'text-zinc-400' : 'text-zinc-400'
-                  }`}
-                >
-                  {msg.timestamp}
+
+                <div className="flex justify-between items-center pt-2 border-t border-zinc-100 text-[10px] text-zinc-400">
+                  <span>{msg.timestamp}</span>
+                  {!isUser && (
+                    <button
+                      onClick={() => handleCopyMessage(msg.id, msg.content)}
+                      className="hover:text-zinc-700 flex items-center space-x-1"
+                      title="Copiar respuesta"
+                    >
+                      {copiedId === msg.id ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-600 font-semibold">Copiado</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -296,6 +464,23 @@ He analizado tus datos actuales:
             </div>
           </div>
         )}
+
+        {/* Suggestion chips at bottom */}
+        {!isLoading && messages.length > 1 && (
+          <div className="pt-2 flex flex-wrap gap-1.5 items-center">
+            <span className="text-[10px] uppercase font-bold text-zinc-400 mr-1">Continuar:</span>
+            {followUpChips.map((chip, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSendMessage(chip)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-all"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div ref={chatBottomRef} />
       </div>
 
@@ -312,7 +497,7 @@ He analizado tus datos actuales:
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Pregúntale a tu asesor (ej: ¿Cómo salir de mi tarjeta más cara?)..."
+            placeholder="Pregúntale a tu coach (ej: ¿Cómo pagar mi tarjeta con interés del 32%?)..."
             className="flex-1 px-4 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-zinc-900 text-zinc-900 placeholder:text-zinc-400"
           />
           <button
