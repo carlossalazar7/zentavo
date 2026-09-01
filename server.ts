@@ -36,7 +36,7 @@ app.get('/api/health', (req, res) => {
 // Endpoint: AI Financial Diagnosis & Custom Salary Distribution
 app.post('/api/ai/diagnose', async (req, res) => {
   try {
-    const { salary, extraIncome, expenses, debts, currency, period } = req.body;
+    const { salary, extraIncome, expenses, debts, currency, period, profileType, profileName } = req.body;
     
     if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({
@@ -48,12 +48,21 @@ app.post('/api/ai/diagnose', async (req, res) => {
 
     const ai = getAi();
 
-    const prompt = `Actúa como un Asesor Financiero y Coach de Presupuesto Personal experto y empático.
-Analiza con rigor matemático y sentido práctico la situación financiera de este usuario:
+    const isBusiness = profileType === 'Empresa';
+    const isFreelance = profileType === 'Trabajo';
+
+    const roleDescription = isBusiness
+      ? 'Actúa como un Consultor Financiero y CFO Estratégico para Empresas, Negocios y PyMEs.'
+      : isFreelance
+      ? 'Actúa como un Asesor Financiero experto para Trabajadores Independientes, Freelancers y Profesionales.'
+      : 'Actúa como un Asesor Financiero y Coach de Presupuesto Personal experto y empático.';
+
+    const prompt = `${roleDescription}
+Analiza con rigor matemático y sentido práctico la situación financiera de este perfil "${profileName || 'Principal'}" (Tipo: ${profileType || 'Personal'}):
 
 DATOS FINANCIEROS:
-- Sueldo neto mensual: ${currency} ${salary}
-- Ingresos extras mensuales: ${currency} ${extraIncome || 0}
+- ${isBusiness ? 'Facturación Neta Mensual' : 'Sueldo neto mensual'}: ${currency} ${salary}
+- ${isBusiness ? 'Cobranzas o Ingresos secundarios' : 'Ingresos extras mensuales'}: ${currency} ${extraIncome || 0}
 - Ingreso total mensual: ${currency} ${(Number(salary) || 0) + (Number(extraIncome) || 0)}
 - Moneda: ${currency}
 - Periodo analizado: ${period || 'Mes actual'}
@@ -66,10 +75,10 @@ ${JSON.stringify(debts, null, 2)}
 
 TAREA:
 1. Evalúa el ratio de endeudamiento (DTI: Pagos mensuales de deuda / Ingresos netos) y la carga total de deuda.
-2. Identifica con precisión fugas de dinero (gastos hormiga, suscripciones innecesarias, sobregasto en ocio, compras impulsivas).
-3. Propón un plan de distribución de sueldo ajustado a su realidad (por ejemplo, si tiene mucha deuda, ajustar la regla 50/30/20 hacia un plan agresivo como 50/15/35 o 55/15/30).
-4. Elige la mejor estrategia de pago de deudas (Bola de Nieve vs Avalancha) justificando por qué es mejor para su perfil psicológico y financiero.
-5. Brinda recomendaciones prácticas y realistas para reducir costos de inmediato sin arruinar su calidad de vida.
+2. Identifica con precisión fugas de dinero (${isBusiness ? 'gastos operativos redundantes, sobrecostos de proveedores, suscripciones de software sin uso' : 'gastos hormiga, suscripciones innecesarias, sobregasto en ocio'}).
+3. Propón un plan de distribución ajustado a su realidad (${isBusiness ? 'Costos Operativos Esenciales %, Gastos de Crecimiento/Marketing %, Pasivos/Deudas Comerciales %, Fondo de Reserva Operativo %' : 'Regla 50/30/20 o adaptada'}).
+4. Elige la mejor estrategia de pago de deudas (${isBusiness ? 'Pasivos de mayor costo financiero primero o consolidación comercial' : 'Bola de Nieve vs Avalancha'}).
+5. Brinda recomendaciones prácticas y realistas para optimizar costos de inmediato.
 
 Responde estrictamente en formato JSON según el esquema especificado.`;
 
@@ -78,7 +87,7 @@ Responde estrictamente en formato JSON según el esquema especificado.`;
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        systemInstruction: 'Eres un asesor financiero personal experto, empático, claro y pedagógico en idioma español. Tu misión es devolver análisis realistas, números precisos y pasos accionables sin tecnicismos innecesarios.',
+        systemInstruction: `Eres un asesor financiero experto y pedagógico en idioma español para perfiles de tipo ${profileType || 'Personal'}. Tu misión es devolver análisis realistas, números precisos y pasos accionables sin tecnicismos innecesarios.`,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -177,18 +186,24 @@ app.post('/api/ai/chat', async (req, res) => {
 
     const ai = getAi();
 
-    const systemPrompt = `Eres un Asesor y Coach Financiero Personal inteligente, empático y práctico llamado "Coach Financiero Zentavo".
-Estás interactuando con un usuario que busca llevar control de sus gastos, reducir costos, liquidar deudas y distribuir mejor su sueldo mensual.
+    const profileType = financialContext?.profileType || 'Personal';
+    const profileName = financialContext?.profileName || 'Principal';
+    const isBusiness = profileType === 'Empresa';
+    const isFreelance = profileType === 'Trabajo';
+
+    const systemPrompt = `Eres un Asesor y Coach Financiero experto, inteligente, empático y práctico llamado "Coach Financiero Zentavo".
+Estás interactuando con un usuario en su perfil "${profileName}" (Tipo de cuenta: ${profileType}).
+${isBusiness ? 'Este perfil corresponde a una Empresa / Negocio / PyME. Enfócate en flujo de caja, optimización de costos operativos, margen de contribución, proveedores y sostenibilidad del negocio.' : isFreelance ? 'Este perfil corresponde a un Trabajo Independiente / Freelance. Enfócate en facturación por proyectos, reservas para impuestos, gastos deducibles y colchón para meses lentos.' : 'Este perfil corresponde a Finanzas Personales / Familiares. Enfócate en control de gastos del hogar, liquidar deudas de tarjetas y crear un fondo de emergencia sólido.'}
 
 CONTEXTO FINANCIERO DEL USUARIO:
 ${JSON.stringify(financialContext, null, 2)}
 
 INSTRUCCIONES DE RESPUESTA:
 - Responde siempre en español, de forma clara, directa, comprensiva y estructurada con listas o viñetas.
-- Haz cálculos matemáticos explícitos basados en su sueldo (${financialContext.currency} ${financialContext.salary}) y sus deudas.
-- Si el usuario te pregunta "¿puedo comprar X cosa?", calcula el impacto en su sueldo y responde con honestidad constructiva.
-- Proporciona consejos reales de economía doméstica (cómo negociar tarifas, cómo evitar compras por impulso, cómo organizar las quincenas/meses).
-- Sé motivador pero realista: no aconsejes inversiones de alto riesgo si tiene deudas caras de tarjetas de crédito.`;
+- Haz cálculos matemáticos explícitos basados en sus ingresos (${financialContext.currency} ${financialContext.salary}) y sus deudas.
+- Si el usuario te pregunta "¿puedo hacer este gasto o compra?", calcula el impacto porcentual y responde con honestidad constructiva.
+- Proporciona consejos reales y accionables sin tecnicismos innecesarios.
+- Sé motivador pero realista: prioriza siempre la solvencia y la eliminación de intereses caros.`;
 
     const chatContents = messages.map((m: { role: string; content: string }) => ({
       role: m.role === 'user' ? 'user' : 'model',

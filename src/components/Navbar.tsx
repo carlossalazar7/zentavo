@@ -12,16 +12,18 @@ import {
   AlertTriangle,
   CheckCircle2
 } from 'lucide-react';
-import { ActiveTab, SalaryProfile } from '../types';
-import { CURRENCIES } from '../data/defaultData';
+import { ActiveTab, UserProfile } from '../types';
 import { formatMoney } from '../utils/financeCalculators';
 import { ZentavoIcon } from './ZentavoLogo';
+import { ProfileSelector } from './ProfileSelector';
 
 interface NavbarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
-  profile: SalaryProfile;
-  onOpenProfile: () => void;
+  profiles: UserProfile[];
+  activeProfile: UserProfile;
+  onSelectProfile: (profileId: string) => void;
+  onOpenProfileModal: (tab?: 'edit' | 'manage' | 'create' | 'backup') => void;
   dtiRatio: number;
   totalLeaksCount: number;
   lastSavedTime?: string;
@@ -30,13 +32,15 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
-  profile,
-  onOpenProfile,
+  profiles,
+  activeProfile,
+  onSelectProfile,
+  onOpenProfileModal,
   dtiRatio,
   totalLeaksCount,
   lastSavedTime,
 }) => {
-  const totalIncome = (Number(profile.monthlySalary) || 0) + (Number(profile.extraIncome) || 0);
+  const totalIncome = (Number(activeProfile.monthlySalary) || 0) + (Number(activeProfile.extraIncome) || 0);
 
   const navItems: { id: ActiveTab; label: string; icon: React.FC<{ className?: string }>; badge?: string; badgeColor?: string }[] = [
     { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
@@ -89,7 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Quick Financial Badge & Settings */}
+          {/* Quick Financial Badge & Profile Switcher */}
           <div className="flex items-center space-x-2 sm:space-x-3">
             {/* Auto-save status badge */}
             <div 
@@ -101,20 +105,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               {lastSavedTime && <span className="text-zinc-400">({lastSavedTime})</span>}
             </div>
 
-            <button
-              id="btn-navbar-profile"
-              onClick={onOpenProfile}
-              className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 transition-colors border border-zinc-200/80 text-xs sm:text-sm text-left"
-              title="Ajustar sueldo o moneda"
-            >
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] uppercase font-semibold text-zinc-400 tracking-wider">Ingreso Neto</span>
-                <span className="font-bold text-zinc-900 tracking-tight">{formatMoney(totalIncome, profile.currencySymbol)}</span>
-              </div>
-              <div className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center text-zinc-600">
-                <Settings className="w-3.5 h-3.5" />
-              </div>
-            </button>
+            {/* Profile Dropdown Switcher */}
+            <ProfileSelector
+              profiles={profiles}
+              activeProfile={activeProfile}
+              onSelectProfile={onSelectProfile}
+              onOpenManageProfiles={(tab) => onOpenProfileModal(tab || 'edit')}
+            />
           </div>
         </div>
 
@@ -149,3 +146,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

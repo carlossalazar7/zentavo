@@ -1,4 +1,4 @@
-import { Expense, Debt, SalaryProfile, SalaryAllocationPlan } from '../types';
+import { Expense, Debt, SalaryProfile, SalaryAllocationPlan, UserProfile, ProfileType } from '../types';
 
 export const EXPENSE_CATEGORIES = [
   { id: 'vivienda', name: 'Vivienda y Alquiler', defaultType: 'Necesidad' as const, icon: 'Home' },
@@ -16,7 +16,66 @@ export const EXPENSE_CATEGORIES = [
   { id: 'otros', name: 'Otros Imprevistos', defaultType: 'Deseo' as const, icon: 'HelpCircle' },
 ];
 
+export const PROFILE_TYPES: { type: ProfileType; label: string; description: string; defaultIcon: string; defaultColor: string }[] = [
+  { 
+    type: 'Personal', 
+    label: 'Finanzas Personales', 
+    description: 'Control de sueldo fijo, gastos de hogar, deudas personales y fondo de ahorro familiar.',
+    defaultIcon: 'User',
+    defaultColor: 'emerald'
+  },
+  { 
+    type: 'Trabajo', 
+    label: 'Trabajo / Freelance', 
+    description: 'Gestión de cobros por servicios, clientes, herramientas de trabajo, viáticos e impuestos.',
+    defaultIcon: 'Briefcase',
+    defaultColor: 'blue'
+  },
+  { 
+    type: 'Empresa', 
+    label: 'Empresa / Negocio / PyME', 
+    description: 'Facturación mensual, costos operativos, nóminas, proveedores y caja de capital de trabajo.',
+    defaultIcon: 'Building2',
+    defaultColor: 'purple'
+  },
+  { 
+    type: 'Otro', 
+    label: 'Proyecto / Otro', 
+    description: 'Presupuestos independientes para viajes, inversiones, inmuebles o proyectos especiales.',
+    defaultIcon: 'Sparkles',
+    defaultColor: 'amber'
+  },
+];
+
+export const PROFILE_ICONS = [
+  { id: 'User', name: 'Personal (Usuario)', emoji: '👤' },
+  { id: 'Briefcase', name: 'Trabajo (Portafolio)', emoji: '💼' },
+  { id: 'Building2', name: 'Empresa (Edificio)', emoji: '🏢' },
+  { id: 'Store', name: 'Comercio / Tienda', emoji: '🏪' },
+  { id: 'Laptop', name: 'Freelance / Digital', emoji: '💻' },
+  { id: 'Wallet', name: 'Billetera / Ahorro', emoji: '👛' },
+  { id: 'PiggyBank', name: 'Fondo / Hucha', emoji: '🐷' },
+  { id: 'Truck', name: 'Logística / Flota', emoji: '🚚' },
+  { id: 'Sparkles', name: 'Proyecto Especial', emoji: '✨' },
+];
+
+export const PROFILE_COLORS = [
+  { id: 'emerald', name: 'Verde Esmeralda', badge: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
+  { id: 'blue', name: 'Azul Océano', badge: 'bg-blue-50 text-blue-800 border-blue-300', dot: 'bg-blue-500' },
+  { id: 'purple', name: 'Púrpura Imperial', badge: 'bg-purple-50 text-purple-800 border-purple-300', dot: 'bg-purple-500' },
+  { id: 'amber', name: 'Ámbar Cálido', badge: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-500' },
+  { id: 'rose', name: 'Rosa Rubí', badge: 'bg-rose-50 text-rose-800 border-rose-300', dot: 'bg-rose-500' },
+  { id: 'indigo', name: 'Índigo Profundo', badge: 'bg-indigo-50 text-indigo-800 border-indigo-300', dot: 'bg-indigo-500' },
+  { id: 'zinc', name: 'Grafito Neutro', badge: 'bg-zinc-100 text-zinc-800 border-zinc-300', dot: 'bg-zinc-700' },
+];
+
 export const DEFAULT_SALARY_PROFILE: SalaryProfile = {
+  id: 'profile-personal-default',
+  name: 'Finanzas Personales',
+  type: 'Personal',
+  icon: 'User',
+  colorTheme: 'emerald',
+  description: 'Presupuesto y control de gastos personales',
   monthlySalary: 0,
   extraIncome: 0,
   payFrequency: 'Mensual',
@@ -24,7 +83,96 @@ export const DEFAULT_SALARY_PROFILE: SalaryProfile = {
   currencySymbol: '$',
   emergencyFundCurrent: 0,
   emergencyFundGoal: 0,
+  expenses: [],
+  debts: [],
 };
+
+export const DEFAULT_PROFILES: UserProfile[] = [
+  {
+    id: 'profile-personal',
+    name: 'Finanzas Personales',
+    type: 'Personal',
+    icon: 'User',
+    colorTheme: 'emerald',
+    description: 'Control de sueldo fijo, gastos de hogar y fondo de ahorro familiar.',
+    monthlySalary: 0,
+    extraIncome: 0,
+    payFrequency: 'Mensual',
+    currency: 'USD',
+    currencySymbol: '$',
+    emergencyFundCurrent: 0,
+    emergencyFundGoal: 0,
+    expenses: [],
+    debts: [],
+    selectedPlan: {
+      id: 'anti-debt-50-15-35',
+      name: 'Plan Anti-Deudas (Recomendado si debes mucho)',
+      description: 'Recorta drásticamente los deseos para destinar el 35% de tu sueldo a liquidar deudas rápido.',
+      needsPercentage: 50,
+      wantsPercentage: 15,
+      debtPercentage: 25,
+      savingsPercentage: 10,
+    },
+    aiDiagnosis: null,
+    chatMessages: [],
+  },
+  {
+    id: 'profile-trabajo',
+    name: 'Trabajo / Freelance',
+    type: 'Trabajo',
+    icon: 'Briefcase',
+    colorTheme: 'blue',
+    description: 'Facturación por proyectos, servicios profesionales y retenciones.',
+    monthlySalary: 0,
+    extraIncome: 0,
+    payFrequency: 'Mensual',
+    currency: 'USD',
+    currencySymbol: '$',
+    emergencyFundCurrent: 0,
+    emergencyFundGoal: 0,
+    expenses: [],
+    debts: [],
+    selectedPlan: {
+      id: 'standard-50-30-20',
+      name: 'Regla Tradicional 50/30/20',
+      description: 'Equilibrio ideal para finanzas de trabajo y servicios.',
+      needsPercentage: 50,
+      wantsPercentage: 30,
+      debtPercentage: 0,
+      savingsPercentage: 20,
+    },
+    aiDiagnosis: null,
+    chatMessages: [],
+  },
+  {
+    id: 'profile-empresa',
+    name: 'Empresa / Negocio',
+    type: 'Empresa',
+    icon: 'Building2',
+    colorTheme: 'purple',
+    description: 'Ventas brutas, gastos de nómina, alquiler comercial y proveedores.',
+    monthlySalary: 0,
+    extraIncome: 0,
+    payFrequency: 'Mensual',
+    currency: 'USD',
+    currencySymbol: '$',
+    emergencyFundCurrent: 0,
+    emergencyFundGoal: 0,
+    expenses: [],
+    debts: [],
+    selectedPlan: {
+      id: 'standard-50-30-20',
+      name: 'Regla Tradicional 50/30/20',
+      description: 'Equilibrio para costos operativos y reinversión.',
+      needsPercentage: 50,
+      wantsPercentage: 30,
+      debtPercentage: 0,
+      savingsPercentage: 20,
+    },
+    aiDiagnosis: null,
+    chatMessages: [],
+  },
+];
 
 export const PRESET_SALARY_PLANS: SalaryAllocationPlan[] = [
   {

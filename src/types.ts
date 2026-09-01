@@ -1,3 +1,31 @@
+export type ProfileType = 'Personal' | 'Trabajo' | 'Empresa' | 'Otro';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  type: ProfileType;
+  icon: string;
+  colorTheme: string;
+  description?: string;
+  monthlySalary: number;
+  extraIncome: number;
+  payFrequency: 'Mensual' | 'Quincenal' | 'Semanal';
+  currency: string;
+  currencySymbol: string;
+  emergencyFundCurrent: number;
+  emergencyFundGoal: number;
+  expenses: Expense[];
+  debts: Debt[];
+  selectedPlan?: SalaryAllocationPlan;
+  aiDiagnosis?: AIDiagnosisResult | null;
+  chatMessages?: ChatMessage[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// SalaryProfile for compatibility
+export type SalaryProfile = UserProfile;
+
 export type ExpenseType = 'Necesidad' | 'Deseo' | 'Deuda';
 
 export type PaymentMethod = 
@@ -31,16 +59,6 @@ export interface Debt {
   dueDateDay?: number;
   category: 'Tarjeta de Crédito' | 'Préstamo Personal' | 'Hipotecario' | 'Vehicular' | 'Familiar / Informal' | 'Servicios Atrasados';
   notes?: string;
-}
-
-export interface SalaryProfile {
-  monthlySalary: number;
-  extraIncome: number;
-  payFrequency: 'Mensual' | 'Quincenal' | 'Semanal';
-  currency: string;
-  currencySymbol: string;
-  emergencyFundCurrent: number;
-  emergencyFundGoal: number;
 }
 
 export interface SalaryAllocationPlan {

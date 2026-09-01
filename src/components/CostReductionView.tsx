@@ -95,6 +95,8 @@ export const CostReductionView: React.FC<CostReductionViewProps> = ({
           debts,
           currency: profile.currencySymbol,
           period: 'Mes en curso',
+          profileType: profile.type,
+          profileName: profile.name,
         }),
       });
 

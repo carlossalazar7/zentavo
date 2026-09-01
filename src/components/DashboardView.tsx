@@ -33,6 +33,7 @@ interface DashboardViewProps {
   profile: SalaryProfile;
   setActiveTab: (tab: ActiveTab) => void;
   onOpenAddExpense: () => void;
+  onOpenProfileModal?: (tab?: 'edit' | 'manage' | 'create' | 'backup') => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -41,6 +42,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   profile,
   setActiveTab,
   onOpenAddExpense,
+  onOpenProfileModal,
 }) => {
   const totalIncome = calculateTotalIncome(profile);
   const totalExpenses = calculateTotalExpenses(expenses);
@@ -62,9 +64,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="relative overflow-hidden rounded-2xl bg-zinc-900 text-white p-6 sm:p-8 border border-zinc-800 shadow-sm">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="max-w-2xl space-y-2.5">
-            <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-zinc-800 text-emerald-400 text-xs font-semibold border border-zinc-700/60">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Zentavo · Diagnóstico Financiero</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-zinc-800 text-emerald-400 text-xs font-semibold border border-zinc-700/60">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Zentavo · Diagnóstico Financiero</span>
+              </div>
+              {profile.name && (
+                <button
+                  type="button"
+                  onClick={() => onOpenProfileModal?.('manage')}
+                  className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700 transition-colors"
+                  title="Cambiar o administrar perfiles"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>Perfil: <strong>{profile.name}</strong> ({profile.type || 'Personal'})</span>
+                </button>
+              )}
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-700/80 bg-zinc-950 flex items-center justify-center shrink-0">

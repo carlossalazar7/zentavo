@@ -63,15 +63,23 @@ He analizado tus datos actuales:
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
+  const chatStorageKey = `${STORAGE_KEYS.CHAT_MESSAGES}_${profile.id}`;
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = loadFromStorage<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
+    const saved = loadFromStorage<ChatMessage[]>(chatStorageKey, []);
     return saved.length > 0 ? saved : [initialWelcomeMessage];
   });
 
-  // Sync messages with localStorage
+  // Reload chat when active profile changes
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.CHAT_MESSAGES, messages);
-  }, [messages]);
+    const saved = loadFromStorage<ChatMessage[]>(chatStorageKey, []);
+    setMessages(saved.length > 0 ? saved : [initialWelcomeMessage]);
+  }, [profile.id]);
+
+  // Sync messages with localStorage for active profile
+  useEffect(() => {
+    saveToStorage(chatStorageKey, messages);
+  }, [messages, chatStorageKey]);
 
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +115,8 @@ He analizado tus datos actuales:
     try {
       // Build context
       const financialContext = {
+        profileName: profile.name,
+        profileType: profile.type,
         salary: profile.monthlySalary,
         extraIncome: profile.extraIncome,
         currency: profile.currencySymbol,
@@ -179,7 +189,7 @@ He analizado tus datos actuales:
 
   const handleClearChat = () => {
     setMessages([initialWelcomeMessage]);
-    saveToStorage(STORAGE_KEYS.CHAT_MESSAGES, [initialWelcomeMessage]);
+    saveToStorage(chatStorageKey, [initialWelcomeMessage]);
   };
 
   return (

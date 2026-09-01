@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ActiveTab, Expense, Debt, SalaryProfile, SalaryAllocationPlan, AIDiagnosisResult, ChatMessage } from './types';
+import React, { useState, useEffect } from 'react';
+import { ActiveTab, Expense, Debt, UserProfile, SalaryAllocationPlan, AIDiagnosisResult } from './types';
 import { 
-  DEFAULT_SALARY_PROFILE, 
-  INITIAL_EXPENSES, 
-  INITIAL_DEBTS, 
+  DEFAULT_PROFILES, 
   PRESET_SALARY_PLANS 
 } from './data/defaultData';
 import { 
   STORAGE_KEYS, 
   loadFromStorage, 
   saveToStorage, 
-  clearAllStorage,
-  exportBackupData 
+  loadProfilesAndActive, 
+  saveProfiles, 
+  clearAllStorage 
 } from './utils/storage';
 import { Navbar } from './components/Navbar';
 import { DashboardView } from './components/DashboardView';
@@ -28,75 +27,135 @@ import {
 } from './utils/financeCalculators';
 
 export default function App() {
-  // Load state from localStorage with safe fallback defaults
-  const [profile, setProfile] = useState<SalaryProfile>(() => 
-    loadFromStorage<SalaryProfile>(STORAGE_KEYS.PROFILE, DEFAULT_SALARY_PROFILE)
-  );
+  // Load profiles and active profile ID from storage (with automated v1->v2 migration)
+  const [profileState, setProfileState] = useState<{ profiles: UserProfile[]; activeProfileId: string }>(() => {
+    return loadProfilesAndActive();
+  });
 
-  const [expenses, setExpenses] = useState<Expense[]>(() => 
-    loadFromStorage<Expense[]>(STORAGE_KEYS.EXPENSES, INITIAL_EXPENSES)
-  );
+  const { profiles, activeProfileId } = profileState;
 
-  const [debts, setDebts] = useState<Debt[]>(() => 
-    loadFromStorage<Debt[]>(STORAGE_KEYS.DEBTS, INITIAL_DEBTS)
-  );
+  // Active profile fallback
+  const activeProfile: UserProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0] || DEFAULT_PROFILES[0];
 
-  const [selectedPlan, setSelectedPlan] = useState<SalaryAllocationPlan>(() => 
-    loadFromStorage<SalaryAllocationPlan>(STORAGE_KEYS.SELECTED_PLAN, PRESET_SALARY_PLANS[1])
-  );
-
-  const [aiDiagnosis, setAiDiagnosis] = useState<AIDiagnosisResult | null>(() => 
-    loadFromStorage<AIDiagnosisResult | null>(STORAGE_KEYS.AI_DIAGNOSIS, null)
-  );
+  const expenses: Expense[] = activeProfile.expenses || [];
+  const debts: Debt[] = activeProfile.debts || [];
+  const selectedPlan: SalaryAllocationPlan = activeProfile.selectedPlan || PRESET_SALARY_PLANS[1];
+  const aiDiagnosis: AIDiagnosisResult | null = activeProfile.aiDiagnosis || null;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => 
     loadFromStorage<ActiveTab>(STORAGE_KEYS.ACTIVE_TAB, 'dashboard')
   );
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalInitialTab, setProfileModalInitialTab] = useState<'edit' | 'manage' | 'create' | 'backup'>('edit');
   const [lastSavedTime, setLastSavedTime] = useState<string>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 
-  // Auto-sync with localStorage whenever state changes
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.PROFILE, profile);
-    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-  }, [profile]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
-    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-  }, [expenses]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.DEBTS, debts);
-    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-  }, [debts]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.SELECTED_PLAN, selectedPlan);
-    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-  }, [selectedPlan]);
-
-  useEffect(() => {
-    if (aiDiagnosis) {
-      saveToStorage(STORAGE_KEYS.AI_DIAGNOSIS, aiDiagnosis);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.AI_DIAGNOSIS);
-    }
-    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-  }, [aiDiagnosis]);
-
+  // Auto-sync active tab
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.ACTIVE_TAB, activeTab);
   }, [activeTab]);
 
-  // Handlers for Expenses
+  // Centralized updater for mutating the active profile
+  const updateActiveProfileData = (updater: (prev: UserProfile) => UserProfile) => {
+    setProfileState((prevState) => {
+      const updatedProfiles = prevState.profiles.map((p) => {
+        if (p.id === prevState.activeProfileId) {
+          return updater(p);
+        }
+        return p;
+      });
+
+      saveProfiles(updatedProfiles, prevState.activeProfileId);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return {
+        ...prevState,
+        profiles: updatedProfiles,
+      };
+    });
+  };
+
+  // Switch profile handler
+  const handleSelectProfile = (newId: string) => {
+    if (newId === activeProfileId) return;
+    setProfileState((prev) => {
+      saveProfiles(prev.profiles, newId);
+      return {
+        ...prev,
+        activeProfileId: newId,
+      };
+    });
+  };
+
+  // Create new profile handler
+  const handleCreateProfile = (newProfile: UserProfile) => {
+    setProfileState((prev) => {
+      const nextProfiles = [...prev.profiles, newProfile];
+      saveProfiles(nextProfiles, newProfile.id);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return {
+        profiles: nextProfiles,
+        activeProfileId: newProfile.id,
+      };
+    });
+  };
+
+  // Delete profile handler
+  const handleDeleteProfile = (profileId: string) => {
+    setProfileState((prev) => {
+      if (prev.profiles.length <= 1) return prev;
+      const nextProfiles = prev.profiles.filter((p) => p.id !== profileId);
+      const nextActiveId = prev.activeProfileId === profileId ? nextProfiles[0].id : prev.activeProfileId;
+      saveProfiles(nextProfiles, nextActiveId);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return {
+        profiles: nextProfiles,
+        activeProfileId: nextActiveId,
+      };
+    });
+  };
+
+  // Duplicate profile handler
+  const handleDuplicateProfile = (profileId: string) => {
+    const source = profiles.find((p) => p.id === profileId);
+    if (!source) return;
+
+    const duplicated: UserProfile = {
+      ...source,
+      id: `profile-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      name: `${source.name} (Copia)`,
+      expenses: source.expenses.map((e) => ({ ...e, id: `exp-${Date.now()}-${Math.random().toString(36).substring(2, 5)}` })),
+      debts: source.debts.map((d) => ({ ...d, id: `debt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}` })),
+    };
+
+    setProfileState((prev) => {
+      const nextProfiles = [...prev.profiles, duplicated];
+      saveProfiles(nextProfiles, duplicated.id);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return {
+        profiles: nextProfiles,
+        activeProfileId: duplicated.id,
+      };
+    });
+  };
+
+  // Save changes to active profile settings
+  const handleSaveActiveProfile = (updated: Partial<UserProfile>) => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      ...updated,
+    }));
+  };
+
+  // Handlers for Expenses on active profile
   const handleAddExpense = (newExp: Omit<Expense, 'id'>) => {
     const created: Expense = {
       ...newExp,
       id: `exp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     };
-    setExpenses((prev) => [created, ...prev]);
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      expenses: [created, ...(prev.expenses || [])],
+    }));
   };
 
   const handleAddMultipleExpenses = (newExpenses: Omit<Expense, 'id'>[]) => {
@@ -104,56 +163,108 @@ export default function App() {
       ...exp,
       id: `exp-${Date.now()}-${idx}`,
     }));
-    setExpenses((prev) => [...createdList, ...prev]);
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      expenses: [...createdList, ...(prev.expenses || [])],
+    }));
   };
 
   const handleUpdateExpense = (id: string, updated: Partial<Expense>) => {
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      expenses: (prev.expenses || []).map((e) => (e.id === id ? { ...e, ...updated } : e)),
+    }));
   };
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      expenses: (prev.expenses || []).filter((e) => e.id !== id),
+    }));
   };
 
-  // Handlers for Debts
+  // Handlers for Debts on active profile
   const handleAddDebt = (newDebt: Omit<Debt, 'id'>) => {
     const created: Debt = {
       ...newDebt,
       id: `debt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     };
-    setDebts((prev) => [...prev, created]);
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      debts: [...(prev.debts || []), created],
+    }));
   };
 
   const handleUpdateDebt = (id: string, updated: Partial<Debt>) => {
-    setDebts((prev) => prev.map((d) => (d.id === id ? { ...d, ...updated } : d)));
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      debts: (prev.debts || []).map((d) => (d.id === id ? { ...d, ...updated } : d)),
+    }));
   };
 
   const handleDeleteDebt = (id: string) => {
-    setDebts((prev) => prev.filter((d) => d.id !== id));
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      debts: (prev.debts || []).filter((d) => d.id !== id),
+    }));
   };
 
-  // Reset demo / all data
-  const handleResetData = () => {
+  // Handler for Salary Distribution Plan
+  const handleSelectPlan = (plan: SalaryAllocationPlan) => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      selectedPlan: plan,
+    }));
+  };
+
+  // Handler for AI Diagnosis
+  const handleSaveAiDiagnosis = (diag: AIDiagnosisResult | null) => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      aiDiagnosis: diag,
+    }));
+  };
+
+  // Reset active profile data or all profiles
+  const handleResetActiveProfile = () => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      expenses: [],
+      debts: [],
+      aiDiagnosis: null,
+      selectedPlan: PRESET_SALARY_PLANS[1],
+    }));
+  };
+
+  const handleResetAllData = () => {
     clearAllStorage();
-    setProfile(DEFAULT_SALARY_PROFILE);
-    setExpenses(INITIAL_EXPENSES);
-    setDebts(INITIAL_DEBTS);
-    setSelectedPlan(PRESET_SALARY_PLANS[1]);
-    setAiDiagnosis(null);
+    const defaults = loadProfilesAndActive();
+    setProfileState(defaults);
     setActiveTab('dashboard');
+    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
   };
 
-  // Import external JSON
-  const handleImportData = (data: { profile?: SalaryProfile; expenses?: Expense[]; debts?: Debt[]; selectedPlan?: SalaryAllocationPlan; aiDiagnosis?: AIDiagnosisResult | null }) => {
-    if (data.profile) setProfile(data.profile);
-    if (Array.isArray(data.expenses)) setExpenses(data.expenses);
-    if (Array.isArray(data.debts)) setDebts(data.debts);
-    if (data.selectedPlan) setSelectedPlan(data.selectedPlan);
-    if (data.aiDiagnosis !== undefined) setAiDiagnosis(data.aiDiagnosis);
+  // Import backup data (supports both full multi-profile and single profile)
+  const handleImportProfiles = (importedProfiles: UserProfile[], nextActiveId?: string) => {
+    const validId = nextActiveId && importedProfiles.some((p) => p.id === nextActiveId)
+      ? nextActiveId
+      : importedProfiles[0]?.id || DEFAULT_PROFILES[0].id;
+
+    saveProfiles(importedProfiles, validId);
+    setProfileState({
+      profiles: importedProfiles,
+      activeProfileId: validId,
+    });
+    setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  };
+
+  const handleOpenProfileModal = (tab: 'edit' | 'manage' | 'create' | 'backup' = 'edit') => {
+    setProfileModalInitialTab(tab);
+    setIsProfileModalOpen(true);
   };
 
   // Computed metrics for badges
-  const totalIncome = calculateTotalIncome(profile);
+  const totalIncome = calculateTotalIncome(activeProfile);
   const debtMetrics = calculateDebtMetrics(debts, totalIncome);
   const moneyLeaks = detectMoneyLeaks(expenses);
 
@@ -163,8 +274,10 @@ export default function App() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        profile={profile}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
+        profiles={profiles}
+        activeProfile={activeProfile}
+        onSelectProfile={handleSelectProfile}
+        onOpenProfileModal={handleOpenProfileModal}
         dtiRatio={debtMetrics.dtiRatio}
         totalLeaksCount={moneyLeaks.length}
         lastSavedTime={lastSavedTime}
@@ -176,9 +289,10 @@ export default function App() {
           <DashboardView
             expenses={expenses}
             debts={debts}
-            profile={profile}
+            profile={activeProfile}
             setActiveTab={setActiveTab}
             onOpenAddExpense={() => setActiveTab('expenses')}
+            onOpenProfileModal={handleOpenProfileModal}
           />
         )}
 
@@ -189,7 +303,7 @@ export default function App() {
             onAddMultipleExpenses={handleAddMultipleExpenses}
             onUpdateExpense={handleUpdateExpense}
             onDeleteExpense={handleDeleteExpense}
-            profile={profile}
+            profile={activeProfile}
           />
         )}
 
@@ -197,9 +311,9 @@ export default function App() {
           <CostReductionView
             expenses={expenses}
             debts={debts}
-            profile={profile}
+            profile={activeProfile}
             aiDiagnosis={aiDiagnosis}
-            onSaveAiDiagnosis={(diag) => setAiDiagnosis(diag)}
+            onSaveAiDiagnosis={handleSaveAiDiagnosis}
           />
         )}
 
@@ -209,24 +323,24 @@ export default function App() {
             onAddDebt={handleAddDebt}
             onUpdateDebt={handleUpdateDebt}
             onDeleteDebt={handleDeleteDebt}
-            profile={profile}
+            profile={activeProfile}
           />
         )}
 
         {activeTab === 'salary-distribution' && (
           <SalaryDistributorView
-            profile={profile}
+            profile={activeProfile}
             expenses={expenses}
             aiDiagnosis={aiDiagnosis}
             selectedPlan={selectedPlan}
-            onSelectPlan={setSelectedPlan}
-            onUpdateProfile={(updated) => setProfile((p) => ({ ...p, ...updated }))}
+            onSelectPlan={handleSelectPlan}
+            onUpdateProfile={(updated) => handleSaveActiveProfile(updated)}
           />
         )}
 
         {activeTab === 'ai-coach' && (
           <AiChatAdvisor
-            profile={profile}
+            profile={activeProfile}
             expenses={expenses}
             debts={debts}
           />
@@ -237,27 +351,34 @@ export default function App() {
       <footer className="bg-white border-t border-zinc-200 py-6 text-center text-xs text-zinc-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
-            <span className="font-medium text-zinc-700">Zentavo · Control de Gastos & Sueldo</span>
+            <span className="font-medium text-zinc-700">Zentavo · Control Multi-Perfil de Gastos & Sueldo</span>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              ✓ Guardado en tu dispositivo
+              ✓ {profiles.length} {profiles.length === 1 ? 'Perfil Activo' : 'Perfiles Configurados'}
             </span>
           </div>
-          <span className="text-zinc-400">Tus datos nunca se pierden al recargar · Almacenamiento local persistente</span>
+          <div className="flex items-center space-x-3 text-zinc-400">
+            <span>Perfil actual: <strong className="text-zinc-700">{activeProfile.name}</strong> ({activeProfile.type})</span>
+            <span>·</span>
+            <span>Almacenamiento local persistente</span>
+          </div>
         </div>
       </footer>
 
-      {/* Profile & Settings Modal */}
+      {/* Multi-Profile & Settings Modal */}
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
-        profile={profile}
-        onSaveProfile={setProfile}
-        expenses={expenses}
-        debts={debts}
-        selectedPlan={selectedPlan}
-        aiDiagnosis={aiDiagnosis}
-        onImportData={handleImportData}
-        onResetData={handleResetData}
+        profiles={profiles}
+        activeProfile={activeProfile}
+        initialTab={profileModalInitialTab}
+        onSelectProfile={handleSelectProfile}
+        onSaveProfile={handleSaveActiveProfile}
+        onCreateProfile={handleCreateProfile}
+        onDeleteProfile={handleDeleteProfile}
+        onDuplicateProfile={handleDuplicateProfile}
+        onImportProfiles={handleImportProfiles}
+        onResetActiveProfile={handleResetActiveProfile}
+        onResetAllData={handleResetAllData}
       />
     </div>
   );
