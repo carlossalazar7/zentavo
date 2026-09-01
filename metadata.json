@@ -1,0 +1,8 @@
+{
+  "name": "Zentavo SV",
+  "description": "Aplicación para registrar gastos, analizar endeudamiento en base al sueldo, detectar fugas de dinero y optimizar la distribución de ingresos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
