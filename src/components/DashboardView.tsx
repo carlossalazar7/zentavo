@@ -46,17 +46,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const totalIncome = calculateTotalIncome(profile);
   const totalExpenses = calculateTotalExpenses(expenses);
-  const remainingCash = totalIncome - totalExpenses;
   const { needs, wants, debts: expDebts } = calculateExpensesByType(expenses);
   const debtMetrics = calculateDebtMetrics(debts, totalIncome);
+  
+  // Compromiso real de deuda mensual (el mayor entre las cuotas de Deudas y los gastos de deuda ya registrados en el mes)
+  const totalCommittedMonthlyDebt = Math.max(debtMetrics.monthlyCommittedPayment, expDebts);
+  
+  // Gastos del mes excluyendo deudas para descontar el compromiso de deuda sin duplicar
+  const expensesExcludingDebt = needs + wants;
+  
+  // Flujo libre neto real descontando gastos corrientes y cuotas de deuda mensual
+  const remainingCash = totalIncome - expensesExcludingDebt - totalCommittedMonthlyDebt;
+  
   const moneyLeaks = detectMoneyLeaks(expenses);
   const totalLeaksSum = moneyLeaks.reduce((sum, l) => sum + l.totalAmount, 0);
 
   // Percentages of total income
   const needsPct = totalIncome > 0 ? Math.round((needs / totalIncome) * 100) : 0;
   const wantsPct = totalIncome > 0 ? Math.round((wants / totalIncome) * 100) : 0;
-  const debtsPct = totalIncome > 0 ? Math.round((expDebts / totalIncome) * 100) : 0;
-  const remainingPct = totalIncome > 0 ? Math.round((remainingCash / totalIncome) * 100) : 0;
+  const debtsPct = totalIncome > 0 ? Math.round((totalCommittedMonthlyDebt / totalIncome) * 100) : 0;
+  const remainingPct = totalIncome > 0 ? Math.max(0, Math.round((remainingCash / totalIncome) * 100)) : 0;
 
   return (
     <div className="space-y-6">
@@ -193,7 +202,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {formatMoney(remainingCash, profile.currencySymbol)}
             </div>
             <p className="text-xs text-zinc-500 mt-1">
-              {remainingCash >= 0 ? 'Disponible para ahorro o pagar deuda' : 'Déficit mensual: estás gastando de más'}
+              {remainingCash >= 0 
+                ? (totalCommittedMonthlyDebt > 0 
+                    ? `Libre tras gastos y cuotas de deuda (${formatMoney(totalCommittedMonthlyDebt, profile.currencySymbol)}/mes)` 
+                    : 'Disponible para ahorro o inversión')
+                : `Déficit: superas tus ingresos por ${formatMoney(Math.abs(remainingCash), profile.currencySymbol)}`}
             </p>
           </div>
         </div>
@@ -308,13 +321,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/80">
                   <div className="flex items-center space-x-1.5 text-zinc-700 text-xs font-semibold">
                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    <span>Deudas</span>
+                    <span>Cuotas Deuda</span>
                   </div>
                   <div className="text-base font-bold text-zinc-900 mt-1 tracking-tight">
-                    {formatMoney(expDebts, profile.currencySymbol)}
+                    {formatMoney(totalCommittedMonthlyDebt, profile.currencySymbol)}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-0.5">
-                    {debtsPct}% (Meta: &lt; 20%)
+                    {debtsPct}% (DTI: {debtMetrics.dtiRatio}%)
                   </div>
                 </div>
 
@@ -323,11 +336,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>Flujo Libre</span>
                   </div>
-                  <div className="text-base font-bold text-zinc-900 mt-1 tracking-tight">
+                  <div className={`text-base font-bold mt-1 tracking-tight ${remainingCash >= 0 ? 'text-zinc-900' : 'text-rose-600'}`}>
                     {formatMoney(remainingCash, profile.currencySymbol)}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-0.5">
-                    {remainingPct}% (Ahorro/Extra)
+                    {remainingPct}% (Ahorro/Inversión)
                   </div>
                 </div>
               </div>

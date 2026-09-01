@@ -74,6 +74,10 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [isLeak, setIsLeak] = useState(false);
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installmentNumber, setInstallmentNumber] = useState<string>('1');
+  const [totalInstallments, setTotalInstallments] = useState<string>('3');
+  const [totalPurchaseAmount, setTotalPurchaseAmount] = useState<string>('');
   const [notes, setNotes] = useState('');
 
   // AI Free Text Natural Language Parser state
@@ -113,6 +117,7 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [selectedPaymentFilter, setSelectedPaymentFilter] = useState<'ALL' | 'INSTALLMENTS' | 'NON_INSTALLMENTS'>('ALL');
   const [selectedMonth, setSelectedMonth] = useState<string>('ALL'); // 'ALL' or 'YYYY-MM'
   const [sortOrder, setSortOrder] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
 
@@ -141,6 +146,10 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
     setDate(new Date().toISOString().split('T')[0]);
     setIsRecurring(false);
     setIsLeak(false);
+    setIsInstallment(false);
+    setInstallmentNumber('1');
+    setTotalInstallments('3');
+    setTotalPurchaseAmount('');
     setNotes('');
     setIsModalOpen(true);
   };
@@ -156,6 +165,10 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
     setDate(exp.date);
     setIsRecurring(!!exp.isRecurring);
     setIsLeak(!!exp.isLeak);
+    setIsInstallment(!!exp.isInstallment);
+    setInstallmentNumber(exp.installmentNumber ? String(exp.installmentNumber) : '1');
+    setTotalInstallments(exp.totalInstallments ? String(exp.totalInstallments) : '3');
+    setTotalPurchaseAmount(exp.totalPurchaseAmount ? String(exp.totalPurchaseAmount) : '');
     setNotes(exp.notes || '');
     setIsModalOpen(true);
   };
@@ -166,30 +179,30 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
     const numAmount = parseFloat(amount);
     if (!title.trim() || isNaN(numAmount) || numAmount <= 0) return;
 
+    const parsedInstNumber = isInstallment ? (parseInt(installmentNumber) || 1) : undefined;
+    const parsedTotalInst = isInstallment ? (parseInt(totalInstallments) || 1) : undefined;
+    const parsedTotalPurchase = isInstallment && totalPurchaseAmount ? parseFloat(totalPurchaseAmount) : undefined;
+
+    const payload: Omit<Expense, 'id'> = {
+      title: title.trim(),
+      amount: numAmount,
+      category,
+      type,
+      paymentMethod,
+      date,
+      isRecurring,
+      isLeak,
+      isInstallment,
+      installmentNumber: parsedInstNumber,
+      totalInstallments: parsedTotalInst,
+      totalPurchaseAmount: parsedTotalPurchase,
+      notes: notes.trim(),
+    };
+
     if (editingId) {
-      onUpdateExpense(editingId, {
-        title: title.trim(),
-        amount: numAmount,
-        category,
-        type,
-        paymentMethod,
-        date,
-        isRecurring,
-        isLeak,
-        notes: notes.trim(),
-      });
+      onUpdateExpense(editingId, payload);
     } else {
-      onAddExpense({
-        title: title.trim(),
-        amount: numAmount,
-        category,
-        type,
-        paymentMethod,
-        date,
-        isRecurring,
-        isLeak,
-        notes: notes.trim(),
-      });
+      onAddExpense(payload);
     }
     setIsModalOpen(false);
   };
@@ -358,7 +371,7 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
 
   // Export to CSV
   const handleExportCsv = () => {
-    const headers = ['ID', 'Fecha', 'Concepto', 'Categoría', 'Tipo', 'Monto', 'Moneda', 'Método de Pago', 'Fuga / Hormiga', 'Fijo', 'Notas'];
+    const headers = ['ID', 'Fecha', 'Concepto', 'Categoría', 'Tipo', 'Monto Cuota/Gasto', 'Moneda', 'Método de Pago', 'En Cuotas', 'Cuota Nro', 'Total Cuotas', 'Monto Total Compra', 'Fuga / Hormiga', 'Fijo', 'Notas'];
     const rows = filteredExpenses.map((e) => [
       e.id,
       e.date,
@@ -368,6 +381,10 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
       e.amount,
       profile.currency,
       e.paymentMethod,
+      e.isInstallment ? 'SI' : 'NO',
+      e.isInstallment ? (e.installmentNumber || 1) : '-',
+      e.isInstallment ? (e.totalInstallments || 1) : '-',
+      e.isInstallment && e.totalPurchaseAmount ? e.totalPurchaseAmount : '-',
       e.isLeak ? 'SI' : 'NO',
       e.isRecurring ? 'SI' : 'NO',
       e.notes || ''
@@ -390,7 +407,12 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
     const matchesCat = selectedCategory === 'ALL' || exp.category === selectedCategory;
     const matchesType = selectedType === 'ALL' || exp.type === selectedType;
     const matchesMonth = selectedMonth === 'ALL' || exp.date.startsWith(selectedMonth);
-    return matchesSearch && matchesCat && matchesType && matchesMonth;
+    const matchesPayment = selectedPaymentFilter === 'ALL'
+      ? true
+      : selectedPaymentFilter === 'INSTALLMENTS'
+      ? !!exp.isInstallment
+      : !exp.isInstallment;
+    return matchesSearch && matchesCat && matchesType && matchesMonth && matchesPayment;
   }).sort((a, b) => {
     if (sortOrder === 'date-desc') return new Date(b.date).getTime() - new Date(a.date).getTime();
     if (sortOrder === 'date-asc') return new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -780,6 +802,16 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
               </select>
 
               <select
+                value={selectedPaymentFilter}
+                onChange={(e: any) => setSelectedPaymentFilter(e.target.value)}
+                className="px-2.5 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              >
+                <option value="ALL">Forma de Pago: Todos</option>
+                <option value="INSTALLMENTS">💳 Solo en Cuotas</option>
+                <option value="NON_INSTALLMENTS">💵 Débito / Efectivo / Contado</option>
+              </select>
+
+              <select
                 value={sortOrder}
                 onChange={(e: any) => setSortOrder(e.target.value)}
                 className="px-2.5 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-900"
@@ -816,13 +848,24 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
                   filteredExpenses.map((exp) => (
                     <tr key={exp.id} className="hover:bg-zinc-50/60 transition-colors group">
                       <td className="py-3 px-3">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                           {exp.isLeak && (
-                            <span title="Gasto Hormiga / Fuga detectada" className="text-amber-500">
+                            <span title="Gasto Hormiga / Fuga detectada" className="text-amber-500 shrink-0">
                               <Flame className="w-3.5 h-3.5" />
                             </span>
                           )}
                           <span className="font-bold text-zinc-900">{exp.title}</span>
+                          
+                          {exp.isInstallment && (
+                            <span 
+                              className="px-1.5 py-0.5 rounded text-[9px] bg-purple-50 text-purple-700 border border-purple-200 font-bold flex items-center space-x-1" 
+                              title={`Compra en Cuotas: Cuota ${exp.installmentNumber || 1} de ${exp.totalInstallments || 1}${exp.totalPurchaseAmount ? ` (Total compra: ${formatMoney(exp.totalPurchaseAmount, profile.currencySymbol)})` : ''}`}
+                            >
+                              <CreditCard className="w-2.5 h-2.5 inline" />
+                              <span>Cuota {exp.installmentNumber || 1}/{exp.totalInstallments || 1}</span>
+                            </span>
+                          )}
+
                           {exp.isRecurring && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] bg-zinc-100 text-zinc-600 border border-zinc-200 font-medium">
                               Fijo
@@ -1181,6 +1224,140 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
                 </select>
               </div>
 
+              {/* Installments Option / Compra en Cuotas */}
+              <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200/80 space-y-3">
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isInstallment}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setIsInstallment(checked);
+                      if (checked && paymentMethod !== 'Tarjeta de Crédito') {
+                        setPaymentMethod('Tarjeta de Crédito');
+                      }
+                    }}
+                    className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4"
+                  />
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-purple-900">
+                    <CreditCard className="w-3.5 h-3.5 text-purple-700" />
+                    <span>¿Pagaste esta compra en cuotas? (Tarjeta / Financiado)</span>
+                  </div>
+                </label>
+
+                {isInstallment && (
+                  <div className="space-y-3 pt-1 border-t border-purple-200/60 animate-in fade-in duration-150">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-purple-950 text-[11px] mb-1">
+                          Cantidad total de cuotas *
+                        </label>
+                        <select
+                          value={['2', '3', '6', '9', '12', '18', '24'].includes(totalInstallments) ? totalInstallments : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setTotalInstallments(e.target.value);
+                              if (totalPurchaseAmount && parseFloat(totalPurchaseAmount) > 0) {
+                                const perMonth = parseFloat(totalPurchaseAmount) / parseInt(e.target.value);
+                                setAmount(perMonth.toFixed(2));
+                              }
+                            }
+                          }}
+                          className="w-full px-2.5 py-2 rounded-lg border border-purple-200 bg-white font-semibold text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                        >
+                          <option value="2">2 cuotas</option>
+                          <option value="3">3 cuotas</option>
+                          <option value="6">6 cuotas</option>
+                          <option value="9">9 cuotas</option>
+                          <option value="12">12 cuotas</option>
+                          <option value="18">18 cuotas</option>
+                          <option value="24">24 cuotas</option>
+                          <option value="custom">Otro número...</option>
+                        </select>
+                        {!['2', '3', '6', '9', '12', '18', '24'].includes(totalInstallments) && (
+                          <input
+                            type="number"
+                            min="2"
+                            max="72"
+                            value={totalInstallments}
+                            onChange={(e) => {
+                              setTotalInstallments(e.target.value);
+                              if (totalPurchaseAmount && parseFloat(totalPurchaseAmount) > 0 && parseInt(e.target.value) > 0) {
+                                const perMonth = parseFloat(totalPurchaseAmount) / parseInt(e.target.value);
+                                setAmount(perMonth.toFixed(2));
+                              }
+                            }}
+                            placeholder="Ej: 4"
+                            className="mt-1 w-full px-2.5 py-1.5 rounded-lg border border-purple-200 bg-white font-bold text-xs"
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-purple-950 text-[11px] mb-1">
+                          Cuota actual pagada este mes *
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={totalInstallments ? parseInt(totalInstallments) || 72 : 72}
+                          value={installmentNumber}
+                          onChange={(e) => setInstallmentNumber(e.target.value)}
+                          placeholder="Ej: 1"
+                          className="w-full px-2.5 py-2 rounded-lg border border-purple-200 bg-white font-semibold text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-purple-950 text-[11px] mb-1">
+                        Monto total de la compra original (opcional)
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2.5 top-2 font-bold text-zinc-400 text-xs">{profile.currencySymbol}</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={totalPurchaseAmount}
+                            onChange={(e) => {
+                              setTotalPurchaseAmount(e.target.value);
+                              const parsedTot = parseFloat(e.target.value);
+                              const parsedInst = parseInt(totalInstallments);
+                              if (!isNaN(parsedTot) && parsedTot > 0 && !isNaN(parsedInst) && parsedInst > 0) {
+                                setAmount((parsedTot / parsedInst).toFixed(2));
+                              }
+                            }}
+                            placeholder="Ej: 300.00"
+                            className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-purple-200 bg-white text-xs font-bold focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                          />
+                        </div>
+                        {amount && parseFloat(amount) > 0 && parseInt(totalInstallments) > 0 && !totalPurchaseAmount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const calc = (parseFloat(amount) * parseInt(totalInstallments)).toFixed(2);
+                              setTotalPurchaseAmount(calc);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold text-[10px] whitespace-nowrap transition-colors"
+                          >
+                            Calcular total ({formatMoney(parseFloat(amount) * parseInt(totalInstallments), profile.currencySymbol)})
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-purple-100/60 text-purple-900 text-[11px] flex items-center space-x-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-purple-700" />
+                      <span>
+                        Registrando <strong>Cuota {installmentNumber || 1} de {totalInstallments || 1}</strong> por <strong>{formatMoney(parseFloat(amount) || 0, profile.currencySymbol)}/mes</strong>.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center space-x-6 py-1">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -1280,7 +1457,9 @@ export const ExpenseTrackerView: React.FC<ExpenseTrackerViewProps> = ({
                 <div className="space-y-1">
                   {filteredExpenses.slice(0, 15).map((e) => (
                     <div key={e.id} className="flex justify-between text-[11px] py-1 border-b border-zinc-100">
-                      <span>{e.date} · <strong>{e.title}</strong> ({e.category})</span>
+                      <span>
+                        {e.date} · <strong>{e.title}</strong> {e.isInstallment ? `[Cuota ${e.installmentNumber || 1}/${e.totalInstallments || 1}]` : ''} ({e.category})
+                      </span>
                       <span className="font-bold text-zinc-900">{formatMoney(e.amount, profile.currencySymbol)}</span>
                     </div>
                   ))}

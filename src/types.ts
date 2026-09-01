@@ -80,6 +80,10 @@ export interface Expense {
   dueDateDay?: number;
   notes?: string;
   isLeak?: boolean; // Marcar si es considerado un gasto hormiga o prescindible
+  isInstallment?: boolean; // Compra o gasto pagado en cuotas
+  installmentNumber?: number; // Cuota actual (ej: 1)
+  totalInstallments?: number; // Total de cuotas (ej: 3, 6, 12, 24)
+  totalPurchaseAmount?: number; // Monto total de la compra original si aplica
   receiptData?: {
     merchant?: string;
     items?: string[];
