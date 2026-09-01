@@ -12,9 +12,15 @@ import {
   RefreshCw,
   Building,
   HeartHandshake,
-  DollarSign
+  DollarSign,
+  Target,
+  Plus,
+  Edit3,
+  Trash2,
+  TrendingUp,
+  Check
 } from 'lucide-react';
-import { SalaryProfile, Expense, SalaryAllocationPlan, AIDiagnosisResult } from '../types';
+import { SalaryProfile, Expense, SalaryAllocationPlan, AIDiagnosisResult, SavingsGoal } from '../types';
 import { PRESET_SALARY_PLANS } from '../data/defaultData';
 import { 
   formatMoney, 
@@ -30,6 +36,8 @@ interface SalaryDistributorViewProps {
   selectedPlan: SalaryAllocationPlan;
   onSelectPlan: (plan: SalaryAllocationPlan) => void;
   onUpdateProfile: (updated: Partial<SalaryProfile>) => void;
+  savingsGoals?: SavingsGoal[];
+  onUpdateSavingsGoals?: (goals: SavingsGoal[]) => void;
 }
 
 export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
@@ -39,6 +47,8 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
   selectedPlan,
   onSelectPlan,
   onUpdateProfile,
+  savingsGoals = [],
+  onUpdateSavingsGoals,
 }) => {
   const totalIncome = calculateTotalIncome(profile);
   const { needs: actualNeeds, wants: actualWants, debts: actualDebts } = calculateExpensesByType(expenses);
@@ -56,7 +66,19 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
 
   // Bi-weekly split helper (if user gets paid quincenalmente)
   const isQuincenal = profile.payFrequency === 'Quincenal';
-  const divisor = isQuincenal ? 2 : 1;
+
+  // Savings Goals Modal State
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [goalName, setGoalName] = useState('');
+  const [goalTargetAmount, setGoalTargetAmount] = useState('');
+  const [goalCurrentAmount, setGoalCurrentAmount] = useState('');
+  const [goalTargetDate, setGoalTargetDate] = useState('');
+  const [goalCategory, setGoalCategory] = useState<SavingsGoal['category']>('Emergencia');
+
+  // Quick Deposit modal state
+  const [depositGoalId, setDepositGoalId] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
 
   // Apply AI Recommended Plan if available
   const handleApplyAiPlan = () => {
@@ -90,6 +112,87 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
       savingsPercentage: customSavings,
     };
     onSelectPlan(newPlan);
+  };
+
+  // Savings Goals Handlers
+  const openNewGoalModal = () => {
+    setEditingGoalId(null);
+    setGoalName('');
+    setGoalTargetAmount('');
+    setGoalCurrentAmount('');
+    setGoalTargetDate('');
+    setGoalCategory('Emergencia');
+    setIsGoalModalOpen(true);
+  };
+
+  const openEditGoalModal = (g: SavingsGoal) => {
+    setEditingGoalId(g.id);
+    setGoalName(g.name);
+    setGoalTargetAmount(String(g.targetAmount));
+    setGoalCurrentAmount(String(g.currentAmount));
+    setGoalTargetDate(g.targetDate || '');
+    setGoalCategory(g.category || 'Emergencia');
+    setIsGoalModalOpen(true);
+  };
+
+  const handleSaveGoal = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetNum = parseFloat(goalTargetAmount);
+    const currentNum = parseFloat(goalCurrentAmount) || 0;
+    if (!goalName.trim() || isNaN(targetNum) || targetNum <= 0) return;
+
+    let nextGoals: SavingsGoal[];
+    if (editingGoalId) {
+      nextGoals = savingsGoals.map((g) =>
+        g.id === editingGoalId
+          ? {
+              ...g,
+              name: goalName.trim(),
+              targetAmount: targetNum,
+              currentAmount: currentNum,
+              targetDate: goalTargetDate || undefined,
+              category: goalCategory,
+            }
+          : g
+      );
+    } else {
+      const newG: SavingsGoal = {
+        id: `goal-${Date.now()}`,
+        name: goalName.trim(),
+        targetAmount: targetNum,
+        currentAmount: currentNum,
+        targetDate: goalTargetDate || undefined,
+        category: goalCategory,
+      };
+      nextGoals = [...savingsGoals, newG];
+    }
+
+    if (onUpdateSavingsGoals) {
+      onUpdateSavingsGoals(nextGoals);
+    }
+    setIsGoalModalOpen(false);
+  };
+
+  const handleDeleteGoal = (goalId: string) => {
+    if (onUpdateSavingsGoals) {
+      onUpdateSavingsGoals(savingsGoals.filter((g) => g.id !== goalId));
+    }
+  };
+
+  const handleApplyDeposit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!depositGoalId) return;
+    const addNum = parseFloat(depositAmount);
+    if (isNaN(addNum) || addNum <= 0) return;
+
+    if (onUpdateSavingsGoals) {
+      const updated = savingsGoals.map((g) =>
+        g.id === depositGoalId ? { ...g, currentAmount: g.currentAmount + addNum } : g
+      );
+      onUpdateSavingsGoals(updated);
+    }
+    setDepositGoalId(null);
+    setDepositAmount('');
   };
 
   return (
@@ -265,7 +368,7 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
               {formatMoney(distribution.savingsAmount, profile.currencySymbol)}
             </div>
             <div className="text-[11px] text-zinc-600 pt-1 border-t border-zinc-200">
-              <span>Meta mensual para tranquilidad</span>
+              <span>Disponible mensual para tus metas</span>
             </div>
             {isQuincenal && (
               <span className="text-[10px] text-zinc-500 block">
@@ -276,13 +379,123 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
         </div>
       </div>
 
-      {/* 3. Custom Distribution Fine-Tuning Sliders */}
+      {/* 3. Metas de Ahorro y Fondos con Hitos Visuales */}
+      <div className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="flex items-center space-x-2">
+              <Target className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-base font-bold text-zinc-900">3. Metas de Ahorro & Alcancías ({savingsGoals.length})</h3>
+            </div>
+            <p className="text-xs text-zinc-500">
+              Ahorro mensual programado por tu plan: <strong className="text-emerald-700 font-bold">{formatMoney(distribution.savingsAmount, profile.currencySymbol)}/mes</strong>
+            </p>
+          </div>
+
+          <button
+            onClick={openNewGoalModal}
+            className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-all active:scale-98 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Crear Meta de Ahorro</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+          {savingsGoals.length === 0 ? (
+            <div className="col-span-full py-8 text-center bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 space-y-2">
+              <p className="text-xs text-zinc-500 font-medium">
+                Aún no has creado metas de ahorro (Ej: Fondo de Emergencia, Vacaciones, Matrícula).
+              </p>
+              <button
+                onClick={openNewGoalModal}
+                className="text-xs font-bold text-emerald-700 hover:underline"
+              >
+                + Añadir mi primera meta
+              </button>
+            </div>
+          ) : (
+            savingsGoals.map((g) => {
+              const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
+              const remaining = Math.max(0, g.targetAmount - g.currentAmount);
+              const monthsToGoal = distribution.savingsAmount > 0 ? Math.ceil(remaining / distribution.savingsAmount) : 0;
+
+              return (
+                <div key={g.id} className="p-4 rounded-2xl border border-zinc-200/90 bg-zinc-50/50 hover:bg-white transition-all space-y-3 shadow-2xs">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        {g.category || 'Ahorro'}
+                      </span>
+                      <h4 className="font-bold text-zinc-900 text-sm mt-1">{g.name}</h4>
+                    </div>
+
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => openEditGoalModal(g)}
+                        className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                        title="Editar meta"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteGoal(g.id)}
+                        className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50"
+                        title="Eliminar meta"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Progress Ring / Bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs font-bold">
+                      <span className="text-zinc-800">{formatMoney(g.currentAmount, profile.currencySymbol)}</span>
+                      <span className="text-zinc-500 font-semibold">{pct}% de {formatMoney(g.targetAmount, profile.currencySymbol)}</span>
+                    </div>
+
+                    <div className="w-full h-2.5 rounded-full bg-zinc-200/80 overflow-hidden">
+                      <div
+                        style={{ width: `${pct}%` }}
+                        className="h-full rounded-full bg-emerald-600 transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 text-zinc-500 border-t border-zinc-200/60">
+                    <span>
+                      {remaining <= 0 ? (
+                        <strong className="text-emerald-700 font-bold">¡Meta alcanzada! 🎉</strong>
+                      ) : (
+                        <span>Faltan <strong>{formatMoney(remaining, profile.currencySymbol)}</strong> (~{monthsToGoal} meses)</span>
+                      )}
+                    </span>
+
+                    <button
+                      onClick={() => {
+                        setDepositGoalId(g.id);
+                        setDepositAmount('');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-[11px]"
+                    >
+                      + Abonar
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* 4. Custom Distribution Fine-Tuning Sliders */}
       <div className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <h3 className="text-base font-bold text-zinc-900 flex items-center space-x-2">
               <Sliders className="w-4 h-4 text-zinc-800" />
-              <span>3. Ajuste Manual de Porcentajes a Medida</span>
+              <span>4. Ajuste Manual de Porcentajes a Medida</span>
             </h3>
             <p className="text-xs text-zinc-500">
               Personaliza los porcentajes según tu situación exacta. La suma debe dar 100%.
@@ -386,7 +599,7 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
         </div>
       </div>
 
-      {/* 4. Paycheck Day Action Guide: Sistema de Cuentas */}
+      {/* 5. Paycheck Day Action Guide: Sistema de Cuentas */}
       <div className="bg-zinc-900 text-white rounded-2xl p-6 sm:p-8 space-y-4 shadow-xs">
         <h3 className="text-base font-bold text-white flex items-center space-x-2">
           <Wallet className="w-5 h-5 text-emerald-400" />
@@ -428,6 +641,158 @@ export const SalaryDistributorView: React.FC<SalaryDistributorViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Create / Edit Savings Goal Modal */}
+      {isGoalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-zinc-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+              <h3 className="text-base font-bold text-zinc-900">
+                {editingGoalId ? 'Editar Meta de Ahorro' : 'Crear Nueva Meta de Ahorro'}
+              </h3>
+              <button
+                onClick={() => setIsGoalModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGoal} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-zinc-700 mb-1">Nombre de la Meta *</label>
+                <input
+                  type="text"
+                  required
+                  value={goalName}
+                  onChange={(e) => setGoalName(e.target.value)}
+                  placeholder="Ej: Fondo de Emergencia (3 meses), Vacaciones, Seguro Auto"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 focus:ring-1 focus:ring-zinc-900 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1">Monto Objetivo ({profile.currencySymbol}) *</label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    min="1"
+                    value={goalTargetAmount}
+                    onChange={(e) => setGoalTargetAmount(e.target.value)}
+                    placeholder="1500.00"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1">Monto Acumulado Actual</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={goalCurrentAmount}
+                    onChange={(e) => setGoalCurrentAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1">Categoría</label>
+                  <select
+                    value={goalCategory}
+                    onChange={(e: any) => setGoalCategory(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-medium"
+                  >
+                    <option value="Emergencia">Fondo de Emergencia</option>
+                    <option value="Vacaciones">Vacaciones / Viajes</option>
+                    <option value="Vivienda">Vivienda / Alquiler</option>
+                    <option value="Vehículo">Vehículo / Mantenimiento</option>
+                    <option value="Educación">Educación / Cursos</option>
+                    <option value="Inversión">Inversión / Negocio</option>
+                    <option value="Otro">Otro Proyecto</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1">Fecha Límite (Opcional)</label>
+                  <input
+                    type="date"
+                    value={goalTargetDate}
+                    onChange={(e) => setGoalTargetDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 focus:ring-1 focus:ring-zinc-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-zinc-100 flex space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGoalModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 font-bold hover:bg-zinc-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold shadow-xs"
+                >
+                  {editingGoalId ? 'Guardar Cambios' : 'Crear Meta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Deposit Modal */}
+      {depositGoalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-zinc-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
+            <h3 className="text-base font-bold text-zinc-900">
+              Abonar a Meta de Ahorro
+            </h3>
+            <p className="text-xs text-zinc-500">
+              Registra un depósito para acercarte a tu objetivo financiero.
+            </p>
+
+            <form onSubmit={handleApplyDeposit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-zinc-700 mb-1">Monto a Depositar ({profile.currencySymbol}) *</label>
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  min="0.01"
+                  autoFocus
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="50.00"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-bold text-base"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDepositGoalId(null)}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-100 text-zinc-700 font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold shadow-xs"
+                >
+                  Confirmar Depósito
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ActiveTab, Expense, Debt, UserProfile, SalaryAllocationPlan, AIDiagnosisResult } from './types';
+import { 
+  ActiveTab, 
+  Expense, 
+  Debt, 
+  UserProfile, 
+  SalaryAllocationPlan, 
+  AIDiagnosisResult, 
+  CategoryBudget, 
+  SavingsGoal, 
+  BillReminder 
+} from './types';
 import { 
   DEFAULT_PROFILES, 
   PRESET_SALARY_PLANS 
@@ -41,6 +51,9 @@ export default function App() {
   const debts: Debt[] = activeProfile.debts || [];
   const selectedPlan: SalaryAllocationPlan = activeProfile.selectedPlan || PRESET_SALARY_PLANS[1];
   const aiDiagnosis: AIDiagnosisResult | null = activeProfile.aiDiagnosis || null;
+  const categoryBudgets: CategoryBudget[] = activeProfile.categoryBudgets || [];
+  const savingsGoals: SavingsGoal[] = activeProfile.savingsGoals || [];
+  const billReminders: BillReminder[] = activeProfile.billReminders || [];
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => 
     loadFromStorage<ActiveTab>(STORAGE_KEYS.ACTIVE_TAB, 'dashboard')
@@ -125,6 +138,9 @@ export default function App() {
       name: `${source.name} (Copia)`,
       expenses: source.expenses.map((e) => ({ ...e, id: `exp-${Date.now()}-${Math.random().toString(36).substring(2, 5)}` })),
       debts: source.debts.map((d) => ({ ...d, id: `debt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}` })),
+      categoryBudgets: source.categoryBudgets ? [...source.categoryBudgets] : undefined,
+      savingsGoals: source.savingsGoals ? [...source.savingsGoals] : undefined,
+      billReminders: source.billReminders ? [...source.billReminders] : undefined,
     };
 
     setProfileState((prev) => {
@@ -209,6 +225,30 @@ export default function App() {
     }));
   };
 
+  // Handler for Category Budgets
+  const handleUpdateCategoryBudgets = (budgets: CategoryBudget[]) => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      categoryBudgets: budgets,
+    }));
+  };
+
+  // Handler for Savings Goals
+  const handleUpdateSavingsGoals = (goals: SavingsGoal[]) => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      savingsGoals: goals,
+    }));
+  };
+
+  // Handler for Bill Reminders
+  const handleUpdateBillReminders = (reminders: BillReminder[]) => {
+    updateActiveProfileData((prev) => ({
+      ...prev,
+      billReminders: reminders,
+    }));
+  };
+
   // Handler for Salary Distribution Plan
   const handleSelectPlan = (plan: SalaryAllocationPlan) => {
     updateActiveProfileData((prev) => ({
@@ -233,6 +273,9 @@ export default function App() {
       debts: [],
       aiDiagnosis: null,
       selectedPlan: PRESET_SALARY_PLANS[1],
+      categoryBudgets: [],
+      savingsGoals: [],
+      billReminders: [],
     }));
   };
 
@@ -304,6 +347,8 @@ export default function App() {
             onUpdateExpense={handleUpdateExpense}
             onDeleteExpense={handleDeleteExpense}
             profile={activeProfile}
+            categoryBudgets={categoryBudgets}
+            onUpdateCategoryBudgets={handleUpdateCategoryBudgets}
           />
         )}
 
@@ -324,6 +369,8 @@ export default function App() {
             onUpdateDebt={handleUpdateDebt}
             onDeleteDebt={handleDeleteDebt}
             profile={activeProfile}
+            billReminders={billReminders}
+            onUpdateBillReminders={handleUpdateBillReminders}
           />
         )}
 
@@ -335,6 +382,8 @@ export default function App() {
             selectedPlan={selectedPlan}
             onSelectPlan={handleSelectPlan}
             onUpdateProfile={(updated) => handleSaveActiveProfile(updated)}
+            savingsGoals={savingsGoals}
+            onUpdateSavingsGoals={handleUpdateSavingsGoals}
           />
         )}
 

@@ -9,7 +9,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Lazy GoogleGenAI initialization
 let aiClient: GoogleGenAI | null = null;
@@ -289,6 +290,101 @@ Tipo de gasto: "Necesidad", "Deseo", o "Deuda"`;
   } catch (error: any) {
     console.error('Error in /api/ai/parse-expense:', error);
     res.status(500).json({ error: error.message || 'Error al procesar el texto' });
+  }
+});
+
+// Endpoint: AI OCR Receipt & Invoice Scanner
+app.post('/api/ai/scan-receipt', async (req, res) => {
+  try {
+    const { imageBase64, mimeType = 'image/jpeg', currency = 'USD', profileType = 'Personal' } = req.body;
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({
+        error: 'Servicio de IA no disponible',
+        message: 'No se detectó API Key para Gemini en los secretos.'
+      });
+    }
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'No se proporcionó la imagen del ticket o factura.' });
+    }
+
+    // Clean base64 prefix if provided (e.g. data:image/jpeg;base64,...)
+    const cleanBase64 = imageBase64.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+
+    const ai = getAi();
+    const isBusiness = profileType === 'Empresa';
+
+    const prompt = `Analiza con alta precisión este ticket, factura, recibo o comprobante de pago comercial.
+Extrae los siguientes datos financieros clave:
+1. Nombre del comercio o emisor (merchant / store).
+2. Fecha de emisión o compra en formato YYYY-MM-DD (si no se lee el año o solo día/mes, asume el año actual ${new Date().getFullYear()}).
+3. Monto total pagado (numérico positivo).
+4. Impuestos o propinas si están detallados.
+5. Lista de productos o conceptos principales comprados (máximo 6 items resumidos).
+6. Categoría más adecuada entre:
+   - Alimentación y Supermercado
+   - Vivienda y Alquiler
+   - Servicios Básicos (Luz, Agua, Gas, Net)
+   - Transporte y Movilidad
+   - Salud y Medicamentos
+   - Suscripciones y Apps
+   - Restaurantes y Delivery
+   - Entretenimiento, Salidas y Hobbies
+   - Ropa y Calzado
+   - Gastos Hormiga (Café, Snacks, Kiosco)
+   - Educación y Cursos
+   - ${isBusiness ? 'Costos Operativos y Proveedores' : 'Otros Imprevistos'}
+7. Clasificación del gasto: "Necesidad" (comida esencial, medicina, servicios), "Deseo" (restaurantes, ocio, ropa no esencial) o "Deuda" (pago de tarjeta o crédito).
+8. Método de pago detectado (Efectivo, Tarjeta de Débito, Tarjeta de Crédito, Transferencia).
+9. Breve nota explicativa del recibo.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.7-flash',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: cleanBase64,
+            },
+          },
+          { text: prompt },
+        ],
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            merchant: { type: Type.STRING, description: 'Nombre del establecimiento comercial' },
+            date: { type: Type.STRING, description: 'Fecha en formato YYYY-MM-DD' },
+            totalAmount: { type: Type.NUMBER, description: 'Monto total numérico pagado' },
+            category: { type: Type.STRING, description: 'Categoría asignada' },
+            type: { type: Type.STRING, description: 'Necesidad | Deseo | Deuda' },
+            paymentMethod: { type: Type.STRING, description: 'Efectivo | Tarjeta de Débito | Tarjeta de Crédito | Transferencia' },
+            taxAmount: { type: Type.NUMBER, description: 'Monto de impuestos o IVA si está visible' },
+            items: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Resumen de los principales productos o servicios'
+            },
+            notes: { type: Type.STRING, description: 'Resumen o notas adicionales detectadas en el ticket' },
+            confidence: { type: Type.STRING, description: 'Alta | Media | Baja' }
+          },
+          required: ['merchant', 'totalAmount', 'category', 'type', 'date']
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json({ result: parsed });
+  } catch (error: any) {
+    console.error('Error in /api/ai/scan-receipt:', error);
+    res.status(500).json({
+      error: 'Error al escanear el recibo con IA',
+      details: error.message || 'Error desconocido'
+    });
   }
 });
 

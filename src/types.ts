@@ -1,5 +1,35 @@
 export type ProfileType = 'Personal' | 'Trabajo' | 'Empresa' | 'Otro';
 
+export interface CategoryBudget {
+  category: string;
+  monthlyLimit: number;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  category?: string;
+  targetDate?: string;
+  color?: string;
+  icon?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+export interface BillReminder {
+  id: string;
+  name: string;
+  amount: number;
+  dueDateDay: number; // 1 to 31
+  category: string;
+  type: 'Deuda' | 'Servicio' | 'Suscripción' | 'Vivienda' | 'Otro';
+  isPaidForCurrentMonth?: boolean;
+  lastPaidDate?: string;
+  notes?: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -16,6 +46,9 @@ export interface UserProfile {
   emergencyFundGoal: number;
   expenses: Expense[];
   debts: Debt[];
+  categoryBudgets?: CategoryBudget[];
+  savingsGoals?: SavingsGoal[];
+  billReminders?: BillReminder[];
   selectedPlan?: SalaryAllocationPlan;
   aiDiagnosis?: AIDiagnosisResult | null;
   chatMessages?: ChatMessage[];
@@ -44,8 +77,14 @@ export interface Expense {
   date: string;
   paymentMethod: PaymentMethod;
   isRecurring?: boolean;
+  dueDateDay?: number;
   notes?: string;
   isLeak?: boolean; // Marcar si es considerado un gasto hormiga o prescindible
+  receiptData?: {
+    merchant?: string;
+    items?: string[];
+    tax?: number;
+  };
 }
 
 export interface Debt {
@@ -59,6 +98,8 @@ export interface Debt {
   dueDateDay?: number;
   category: 'Tarjeta de Crédito' | 'Préstamo Personal' | 'Hipotecario' | 'Vehicular' | 'Familiar / Informal' | 'Servicios Atrasados';
   notes?: string;
+  isPaidThisMonth?: boolean;
+  extraMonthlyPayment?: number; // Para simulaciones de amortización
 }
 
 export interface SalaryAllocationPlan {
