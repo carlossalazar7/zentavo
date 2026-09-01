@@ -197,12 +197,12 @@ He analizado tus datos actuales:
       {/* Top Header */}
       <div className="p-4 sm:p-5 border-b border-zinc-200 flex items-center justify-between bg-zinc-900 text-white">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-zinc-950 flex items-center justify-center text-white border border-zinc-700/80 shadow-xs">
-            <ZentavoIcon size={38} className="w-full h-full" />
+          <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 filter drop-shadow-sm">
+            <ZentavoIcon size={40} className="w-full h-full" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-sm sm:text-base text-white">Coach Financiero Zentavo</h3>
+              <h3 className="font-bold text-sm sm:text-base text-white">Coach Financiero Zentavo <span className="text-amber-400 font-extrabold text-xs">SV</span></h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 Gemini AI
               </span>

@@ -82,15 +82,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </div>
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-700/80 bg-zinc-950 flex items-center justify-center shrink-0">
-                <ZentavoIcon size={30} className="w-full h-full" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 filter drop-shadow-md">
+                <ZentavoIcon size={38} className="w-full h-full" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Zentavo
-              </h1>
-              <span className="text-zinc-400 text-sm sm:text-base font-normal">
-                | Control de Gastos & Sueldo
-              </span>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                  Zentavo <span className="text-amber-400">SV</span>
+                </h1>
+                <span className="text-zinc-400 text-sm sm:text-base font-normal">
+                  | Control de Gastos & Sueldo
+                </span>
+              </div>
             </div>
             <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed">
               {totalIncome === 0 && expenses.length === 0 && debts.length === 0 ? (

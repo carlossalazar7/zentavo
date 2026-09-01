@@ -75,16 +75,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Logo & Main Title */}
           <div className="flex items-center space-x-3 cursor-pointer select-none" onClick={() => setActiveTab('dashboard')}>
-            <div className="w-9 h-9 rounded-xl overflow-hidden shadow-xs border border-zinc-200/80 bg-zinc-950 flex items-center justify-center">
-              <ZentavoIcon size={34} className="w-full h-full" />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 filter drop-shadow-xs">
+              <ZentavoIcon size={38} className="w-full h-full" />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1.5">
                 <span className="font-extrabold text-zinc-900 text-base sm:text-lg tracking-tight">
                   Zentavo
                 </span>
+                <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300/80 uppercase tracking-wide">
+                  SV
+                </span>
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/70">
-                  Finanzas Zen
+                  Finanzas
                 </span>
               </div>
               <p className="text-[11px] text-zinc-500 hidden md:block">
